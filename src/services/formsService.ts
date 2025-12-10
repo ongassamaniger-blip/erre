@@ -1,0 +1,813 @@
+import { FormTemplate, FormTemplateCode } from '@/types/forms'
+
+const globalTemplates: FormTemplate[] = [
+  {
+    id: 'tpl-finance-transaction-global',
+    code: 'finance.transaction',
+    name: {
+      tr: 'Finans İşlemi',
+      en: 'Financial Transaction',
+      fr: 'Transaction Financière',
+      ar: 'المعاملة المالية'
+    },
+    tenantScope: 'GLOBAL',
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'system',
+    fields: [
+      {
+        id: 'f-type',
+        key: 'type',
+        type: 'radio',
+        label: {
+          tr: 'İşlem Tipi',
+          en: 'Transaction Type',
+          fr: 'Type de Transaction',
+          ar: 'نوع المعاملة'
+        },
+        required: true,
+        order: 1,
+        visible: true,
+        optionsStatic: [
+          { value: 'income', label: { tr: 'Gelir', en: 'Income', fr: 'Revenu', ar: 'دخل' } },
+          { value: 'expense', label: { tr: 'Gider', en: 'Expense', fr: 'Dépense', ar: 'مصروف' } }
+        ]
+      },
+      {
+        id: 'f-date',
+        key: 'date',
+        type: 'date',
+        label: {
+          tr: 'Tarih',
+          en: 'Date',
+          fr: 'Date',
+          ar: 'تاريخ'
+        },
+        required: true,
+        order: 2,
+        visible: true
+      },
+      {
+        id: 'f-amount',
+        key: 'amount',
+        type: 'number',
+        label: {
+          tr: 'Tutar',
+          en: 'Amount',
+          fr: 'Montant',
+          ar: 'المبلغ'
+        },
+        placeholder: {
+          tr: '0.00',
+          en: '0.00',
+          fr: '0,00',
+          ar: '0.00'
+        },
+        required: true,
+        order: 3,
+        visible: true
+      },
+      {
+        id: 'f-currency',
+        key: 'currency',
+        type: 'select',
+        label: {
+          tr: 'Para Birimi',
+          en: 'Currency',
+          fr: 'Devise',
+          ar: 'العملة'
+        },
+        required: true,
+        order: 4,
+        visible: true,
+        optionsStatic: [
+          { value: 'TRY', label: { tr: 'TRY', en: 'TRY', fr: 'TRY', ar: 'TRY' } },
+          { value: 'USD', label: { tr: 'USD', en: 'USD', fr: 'USD', ar: 'USD' } },
+          { value: 'EUR', label: { tr: 'EUR', en: 'EUR', fr: 'EUR', ar: 'EUR' } },
+          { value: 'GBP', label: { tr: 'GBP', en: 'GBP', fr: 'GBP', ar: 'GBP' } }
+        ]
+      },
+      {
+        id: 'f-category',
+        key: 'categoryId',
+        type: 'select',
+        label: {
+          tr: 'Kategori',
+          en: 'Category',
+          fr: 'Catégorie',
+          ar: 'الفئة'
+        },
+        required: true,
+        order: 5,
+        visible: true
+      },
+      {
+        id: 'f-title',
+        key: 'title',
+        type: 'text',
+        label: {
+          tr: 'Başlık',
+          en: 'Title',
+          fr: 'Titre',
+          ar: 'العنوان'
+        },
+        placeholder: {
+          tr: 'İşlem başlığını girin',
+          en: 'Enter transaction title',
+          fr: 'Entrer le titre de la transaction',
+          ar: 'أدخل عنوان المعاملة'
+        },
+        required: true,
+        order: 6,
+        visible: true
+      },
+      {
+        id: 'f-description',
+        key: 'description',
+        type: 'textarea',
+        label: {
+          tr: 'Açıklama',
+          en: 'Description',
+          fr: 'Description',
+          ar: 'الوصف'
+        },
+        placeholder: {
+          tr: 'Detaylı açıklama girin',
+          en: 'Enter detailed description',
+          fr: 'Entrer une description détaillée',
+          ar: 'أدخل وصفًا مفصلاً'
+        },
+        required: false,
+        order: 7,
+        visible: true
+      },
+      {
+        id: 'f-vendor',
+        key: 'vendorCustomerId',
+        type: 'select',
+        label: {
+          tr: 'Tedarikçi / Müşteri',
+          en: 'Vendor / Customer',
+          fr: 'Fournisseur / Client',
+          ar: 'المورد / العميل'
+        },
+        required: false,
+        order: 8,
+        visible: true
+      },
+      {
+        id: 'f-project',
+        key: 'projectId',
+        type: 'select',
+        label: {
+          tr: 'Proje',
+          en: 'Project',
+          fr: 'Projet',
+          ar: 'المشروع'
+        },
+        required: false,
+        order: 9,
+        visible: true
+      },
+      {
+        id: 'f-department',
+        key: 'departmentId',
+        type: 'select',
+        label: {
+          tr: 'Departman',
+          en: 'Department',
+          fr: 'Département',
+          ar: 'القسم'
+        },
+        required: false,
+        order: 10,
+        visible: true
+      },
+      {
+        id: 'f-payment-method',
+        key: 'paymentMethod',
+        type: 'select',
+        label: {
+          tr: 'Ödeme Yöntemi',
+          en: 'Payment Method',
+          fr: 'Méthode de Paiement',
+          ar: 'طريقة الدفع'
+        },
+        required: true,
+        order: 11,
+        visible: true,
+        optionsStatic: [
+          { value: 'cash', label: { tr: 'Nakit', en: 'Cash', fr: 'Espèces', ar: 'نقدي' } },
+          { value: 'bank_transfer', label: { tr: 'Banka Transferi', en: 'Bank Transfer', fr: 'Virement Bancaire', ar: 'تحويل بنكي' } },
+          { value: 'credit_card', label: { tr: 'Kredi Kartı', en: 'Credit Card', fr: 'Carte de Crédit', ar: 'بطاقة ائتمان' } },
+          { value: 'check', label: { tr: 'Çek', en: 'Check', fr: 'Chèque', ar: 'شيك' } }
+        ]
+      },
+      {
+        id: 'f-attachments',
+        key: 'attachments',
+        type: 'file',
+        label: {
+          tr: 'Belgeler',
+          en: 'Documents',
+          fr: 'Documents',
+          ar: 'المستندات'
+        },
+        required: false,
+        order: 12,
+        visible: true
+      }
+    ]
+  },
+  {
+    id: 'tpl-projects-project-global',
+    code: 'projects.project',
+    name: {
+      tr: 'Yeni Proje',
+      en: 'New Project',
+      fr: 'Nouveau Projet',
+      ar: 'مشروع جديد'
+    },
+    tenantScope: 'GLOBAL',
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'system',
+    fields: [
+      {
+        id: 'p-code',
+        key: 'code',
+        type: 'text',
+        label: {
+          tr: 'Proje Kodu',
+          en: 'Project Code',
+          fr: 'Code du Projet',
+          ar: 'رمز المشروع'
+        },
+        placeholder: {
+          tr: 'Örn: PRJ-2024-001',
+          en: 'e.g. PRJ-2024-001',
+          fr: 'ex: PRJ-2024-001',
+          ar: 'مثال: PRJ-2024-001'
+        },
+        required: true,
+        order: 1,
+        visible: true
+      },
+      {
+        id: 'p-name',
+        key: 'name',
+        type: 'text',
+        label: {
+          tr: 'Proje Adı',
+          en: 'Project Name',
+          fr: 'Nom du Projet',
+          ar: 'اسم المشروع'
+        },
+        required: true,
+        order: 2,
+        visible: true
+      },
+      {
+        id: 'p-description',
+        key: 'description',
+        type: 'textarea',
+        label: {
+          tr: 'Açıklama',
+          en: 'Description',
+          fr: 'Description',
+          ar: 'الوصف'
+        },
+        required: true,
+        order: 3,
+        visible: true
+      },
+      {
+        id: 'p-manager',
+        key: 'managerId',
+        type: 'select',
+        label: {
+          tr: 'Proje Yöneticisi',
+          en: 'Project Manager',
+          fr: 'Chef de Projet',
+          ar: 'مدير المشروع'
+        },
+        required: true,
+        order: 4,
+        visible: true
+      },
+      {
+        id: 'p-start-date',
+        key: 'startDate',
+        type: 'date',
+        label: {
+          tr: 'Başlangıç Tarihi',
+          en: 'Start Date',
+          fr: 'Date de Début',
+          ar: 'تاريخ البدء'
+        },
+        required: true,
+        order: 5,
+        visible: true
+      },
+      {
+        id: 'p-end-date',
+        key: 'endDate',
+        type: 'date',
+        label: {
+          tr: 'Bitiş Tarihi',
+          en: 'End Date',
+          fr: 'Date de Fin',
+          ar: 'تاريخ الانتهاء'
+        },
+        required: true,
+        order: 6,
+        visible: true
+      },
+      {
+        id: 'p-budget',
+        key: 'budget',
+        type: 'number',
+        label: {
+          tr: 'Bütçe',
+          en: 'Budget',
+          fr: 'Budget',
+          ar: 'الميزانية'
+        },
+        required: true,
+        order: 7,
+        visible: true
+      },
+      {
+        id: 'p-category',
+        key: 'category',
+        type: 'select',
+        label: {
+          tr: 'Kategori',
+          en: 'Category',
+          fr: 'Catégorie',
+          ar: 'الفئة'
+        },
+        required: false,
+        order: 8,
+        visible: true
+      }
+    ]
+  },
+  {
+    id: 'tpl-qurban-sacrifice-global',
+    code: 'qurban.sacrifice',
+    name: {
+      tr: 'Kurban Bağışı',
+      en: 'Qurban Donation',
+      fr: 'Don de Qurban',
+      ar: 'تبرع قربان'
+    },
+    tenantScope: 'GLOBAL',
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'system',
+    fields: [
+      {
+        id: 'q-donor-name',
+        key: 'donorName',
+        type: 'text',
+        label: {
+          tr: 'Bağışçı Adı',
+          en: 'Donor Name',
+          fr: 'Nom du Donateur',
+          ar: 'اسم المتبرع'
+        },
+        required: true,
+        order: 1,
+        visible: true
+      },
+      {
+        id: 'q-donor-phone',
+        key: 'donorPhone',
+        type: 'text',
+        label: {
+          tr: 'Telefon',
+          en: 'Phone',
+          fr: 'Téléphone',
+          ar: 'الهاتف'
+        },
+        required: true,
+        order: 2,
+        visible: true
+      },
+      {
+        id: 'q-animal-type',
+        key: 'animalType',
+        type: 'select',
+        label: {
+          tr: 'Hayvan Türü',
+          en: 'Animal Type',
+          fr: 'Type d\'Animal',
+          ar: 'نوع الحيوان'
+        },
+        required: true,
+        order: 3,
+        visible: true,
+        optionsStatic: [
+          { value: 'sheep', label: { tr: 'Koyun', en: 'Sheep', fr: 'Mouton', ar: 'خروف' } },
+          { value: 'goat', label: { tr: 'Keçi', en: 'Goat', fr: 'Chèvre', ar: 'ماعز' } },
+          { value: 'cow', label: { tr: 'Büyükbaş (İnek/Dana)', en: 'Cattle (Cow/Bull)', fr: 'Bovin', ar: 'بقر' } },
+          { value: 'camel', label: { tr: 'Deve', en: 'Camel', fr: 'Chameau', ar: 'جمل' } }
+        ]
+      },
+      {
+        id: 'q-share-count',
+        key: 'shareCount',
+        type: 'number',
+        label: {
+          tr: 'Hisse Sayısı',
+          en: 'Share Count',
+          fr: 'Nombre de Parts',
+          ar: 'عدد الأسهم'
+        },
+        required: true,
+        order: 4,
+        visible: true
+      },
+      {
+        id: 'q-amount',
+        key: 'amount',
+        type: 'number',
+        label: {
+          tr: 'Tutar',
+          en: 'Amount',
+          fr: 'Montant',
+          ar: 'المبلغ'
+        },
+        required: true,
+        order: 5,
+        visible: true
+      },
+      {
+        id: 'q-location',
+        key: 'location',
+        type: 'select',
+        label: {
+          tr: 'Kesim Yeri',
+          en: 'Slaughter Location',
+          fr: 'Lieu d\'Abattage',
+          ar: 'موقع الذبح'
+        },
+        required: true,
+        order: 6,
+        visible: true
+      },
+      {
+        id: 'q-notes',
+        key: 'notes',
+        type: 'textarea',
+        label: {
+          tr: 'Notlar',
+          en: 'Notes',
+          fr: 'Notes',
+          ar: 'ملاحظات'
+        },
+        required: false,
+        order: 7,
+        visible: true
+      }
+    ]
+  },
+  {
+    id: 'tpl-hr-employee-global',
+    code: 'hr.employee',
+    name: {
+      tr: 'Yeni Çalışan',
+      en: 'New Employee',
+      fr: 'Nouvel Employé',
+      ar: 'موظف جديد'
+    },
+    tenantScope: 'GLOBAL',
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'system',
+    fields: [
+      {
+        id: 'e-first-name',
+        key: 'firstName',
+        type: 'text',
+        label: {
+          tr: 'Ad',
+          en: 'First Name',
+          fr: 'Prénom',
+          ar: 'الاسم الأول'
+        },
+        required: true,
+        order: 1,
+        visible: true
+      },
+      {
+        id: 'e-last-name',
+        key: 'lastName',
+        type: 'text',
+        label: {
+          tr: 'Soyad',
+          en: 'Last Name',
+          fr: 'Nom',
+          ar: 'اسم العائلة'
+        },
+        required: true,
+        order: 2,
+        visible: true
+      },
+      {
+        id: 'e-email',
+        key: 'email',
+        type: 'text',
+        label: {
+          tr: 'E-posta',
+          en: 'Email',
+          fr: 'E-mail',
+          ar: 'البريد الإلكتروني'
+        },
+        required: true,
+        order: 3,
+        visible: true
+      },
+      {
+        id: 'e-phone',
+        key: 'phone',
+        type: 'text',
+        label: {
+          tr: 'Telefon',
+          en: 'Phone',
+          fr: 'Téléphone',
+          ar: 'الهاتف'
+        },
+        required: true,
+        order: 4,
+        visible: true
+      },
+      {
+        id: 'e-department',
+        key: 'departmentId',
+        type: 'select',
+        label: {
+          tr: 'Departman',
+          en: 'Department',
+          fr: 'Département',
+          ar: 'القسم'
+        },
+        required: true,
+        order: 5,
+        visible: true
+      },
+      {
+        id: 'e-position',
+        key: 'position',
+        type: 'text',
+        label: {
+          tr: 'Pozisyon',
+          en: 'Position',
+          fr: 'Poste',
+          ar: 'المنصب'
+        },
+        required: true,
+        order: 6,
+        visible: true
+      },
+      {
+        id: 'e-hire-date',
+        key: 'hireDate',
+        type: 'date',
+        label: {
+          tr: 'İşe Başlama Tarihi',
+          en: 'Hire Date',
+          fr: 'Date d\'Embauche',
+          ar: 'تاريخ التوظيف'
+        },
+        required: true,
+        order: 7,
+        visible: true
+      },
+      {
+        id: 'e-salary',
+        key: 'salary',
+        type: 'number',
+        label: {
+          tr: 'Maaş',
+          en: 'Salary',
+          fr: 'Salaire',
+          ar: 'الراتب'
+        },
+        required: false,
+        order: 8,
+        visible: true,
+        onlyRoles: ['SUPER_ADMIN', 'TENANT_ADMIN', 'HR_MANAGER']
+      },
+      {
+        id: 'e-id-number',
+        key: 'idNumber',
+        type: 'text',
+        label: {
+          tr: 'TC Kimlik No',
+          en: 'ID Number',
+          fr: 'Numéro d\'Identité',
+          ar: 'رقم الهوية'
+        },
+        required: true,
+        order: 9,
+        visible: true
+      }
+    ]
+  },
+  {
+    id: 'tpl-hr-leave-global',
+    code: 'hr.leave',
+    name: {
+      tr: 'İzin Talebi',
+      en: 'Leave Request',
+      fr: 'Demande de Congé',
+      ar: 'طلب إجازة'
+    },
+    tenantScope: 'GLOBAL',
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'system',
+    fields: [
+      {
+        id: 'l-type',
+        key: 'type',
+        type: 'select',
+        label: {
+          tr: 'İzin Türü',
+          en: 'Leave Type',
+          fr: 'Type de Congé',
+          ar: 'نوع الإجازة'
+        },
+        required: true,
+        order: 1,
+        visible: true,
+        optionsStatic: [
+          { value: 'annual', label: { tr: 'Yıllık İzin', en: 'Annual Leave', fr: 'Congé Annuel', ar: 'إجازة سنوية' } },
+          { value: 'sick', label: { tr: 'Hastalık İzni', en: 'Sick Leave', fr: 'Congé Maladie', ar: 'إجازة مرضية' } },
+          { value: 'unpaid', label: { tr: 'Ücretsiz İzin', en: 'Unpaid Leave', fr: 'Congé Sans Solde', ar: 'إجازة بدون راتب' } },
+          { value: 'maternity', label: { tr: 'Doğum İzni', en: 'Maternity Leave', fr: 'Congé Maternité', ar: 'إجازة أمومة' } },
+          { value: 'paternity', label: { tr: 'Babalık İzni', en: 'Paternity Leave', fr: 'Congé Paternité', ar: 'إجازة أبوة' } }
+        ]
+      },
+      {
+        id: 'l-start-date',
+        key: 'startDate',
+        type: 'date',
+        label: {
+          tr: 'Başlangıç Tarihi',
+          en: 'Start Date',
+          fr: 'Date de Début',
+          ar: 'تاريخ البدء'
+        },
+        required: true,
+        order: 2,
+        visible: true
+      },
+      {
+        id: 'l-end-date',
+        key: 'endDate',
+        type: 'date',
+        label: {
+          tr: 'Bitiş Tarihi',
+          en: 'End Date',
+          fr: 'Date de Fin',
+          ar: 'تاريخ الانتهاء'
+        },
+        required: true,
+        order: 3,
+        visible: true
+      },
+      {
+        id: 'l-reason',
+        key: 'reason',
+        type: 'textarea',
+        label: {
+          tr: 'Sebep',
+          en: 'Reason',
+          fr: 'Raison',
+          ar: 'السبب'
+        },
+        required: true,
+        order: 4,
+        visible: true
+      },
+      {
+        id: 'l-documents',
+        key: 'documents',
+        type: 'file',
+        label: {
+          tr: 'Destekleyici Belgeler',
+          en: 'Supporting Documents',
+          fr: 'Documents Justificatifs',
+          ar: 'المستندات الداعمة'
+        },
+        required: false,
+        order: 5,
+        visible: true,
+        showIf: {
+          fieldKey: 'type',
+          equals: 'sick'
+        }
+      }
+    ]
+  }
+]
+
+const tenantOverrides: FormTemplate[] = []
+
+class FormsService {
+  private templates: Map<string, FormTemplate> = new Map()
+
+  constructor() {
+    globalTemplates.forEach(t => this.templates.set(t.id, t))
+    tenantOverrides.forEach(t => this.templates.set(t.id, t))
+  }
+
+  async getFormTemplates(tenantId: string): Promise<FormTemplate[]> {
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
+    const allTemplates = Array.from(this.templates.values())
+    
+    const tenantSpecific = allTemplates.filter(
+      t => t.tenantScope === 'TENANT' && t.tenantId === tenantId
+    )
+    
+    const global = allTemplates.filter(t => t.tenantScope === 'GLOBAL')
+    
+    const tenantCodes = new Set(tenantSpecific.map(t => t.code))
+    const filteredGlobal = global.filter(t => !tenantCodes.has(t.code))
+    
+    return [...tenantSpecific, ...filteredGlobal].sort((a, b) => 
+      a.code.localeCompare(b.code)
+    )
+  }
+
+  async getFormTemplateByCode(
+    code: FormTemplateCode,
+    tenantId: string
+  ): Promise<FormTemplate> {
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
+    const allTemplates = Array.from(this.templates.values())
+    
+    const tenantTemplate = allTemplates.find(
+      t => t.code === code && t.tenantScope === 'TENANT' && t.tenantId === tenantId
+    )
+    
+    if (tenantTemplate) {
+      return tenantTemplate
+    }
+    
+    const globalTemplate = allTemplates.find(
+      t => t.code === code && t.tenantScope === 'GLOBAL'
+    )
+    
+    if (!globalTemplate) {
+      throw new Error(`Form template not found: ${code}`)
+    }
+    
+    return globalTemplate
+  }
+
+  async updateFormTemplate(template: FormTemplate): Promise<FormTemplate> {
+    await new Promise(resolve => setTimeout(resolve, 300))
+    
+    const updated = {
+      ...template,
+      version: template.version + 1,
+      updatedAt: new Date().toISOString()
+    }
+    
+    this.templates.set(updated.id, updated)
+    
+    return updated
+  }
+
+  async createTenantOverride(
+    code: FormTemplateCode,
+    tenantId: string,
+    userId: string
+  ): Promise<FormTemplate> {
+    await new Promise(resolve => setTimeout(resolve, 200))
+    
+    const globalTemplate = await this.getFormTemplateByCode(code, tenantId)
+    
+    const override: FormTemplate = {
+      ...globalTemplate,
+      id: `tpl-${code}-${tenantId}`,
+      tenantScope: 'TENANT',
+      tenantId,
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      updatedBy: userId
+    }
+    
+    this.templates.set(override.id, override)
+    
+    return override
+  }
+}
+
+export const formsService = new FormsService()
