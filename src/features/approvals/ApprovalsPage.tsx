@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageBreadcrumb } from '@/components/common/PageBreadcrumb'
 import { RealtimeIndicator } from '@/components/common/RealtimeIndicator'
@@ -40,6 +40,7 @@ import { ApprovalAdvancedFilters } from './components/ApprovalAdvancedFilters'
 import { exportApprovalsToExcel, exportApprovalToPDF, printApproval } from '@/utils/approvalExport'
 import { useQueryClient } from '@tanstack/react-query'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useDebounce } from '@/hooks/use-debounce'
 
 export function ApprovalsPage() {
   const navigate = useNavigate()
@@ -73,6 +74,15 @@ export function ApprovalsPage() {
 
   const [chartData, setChartData] = useState<ApprovalRequest[]>([])
 
+  // Debounce search - performans optimizasyonu
+  const debouncedSearch = useDebounce(filters.search, 300)
+
+  // Memoized filters - search hariç (debounced kullanılıyor)
+  const memoizedFilters = useMemo(() => ({
+    ...filters,
+    search: debouncedSearch,
+  }), [filters.module, filters.status, filters.priority, filters.startDate, filters.endDate, filters.minAmount, filters.maxAmount, debouncedSearch])
+
   const loadData = useCallback(async () => {
     setIsLoading(true)
     try {
@@ -80,8 +90,8 @@ export function ApprovalsPage() {
       const [approvalsData, chartApprovalsData, statsData] = await Promise.all([
         approvalService.getApprovals({
           facilityId: selectedFacility?.id,
-          module: filters.module !== 'all' ? filters.module : undefined,
-          status: filters.status !== 'all' ? filters.status : undefined,
+          module: memoizedFilters.module !== 'all' ? memoizedFilters.module : undefined,
+          status: memoizedFilters.status !== 'all' ? memoizedFilters.status : undefined,
         }),
         // Fetch all data for charts (no status/module filters)
         approvalService.getApprovals({
@@ -93,9 +103,9 @@ export function ApprovalsPage() {
 
       let filtered = approvalsData
 
-      // Arama filtresi
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase()
+      // Arama filtresi (debounced)
+      if (memoizedFilters.search) {
+        const searchLower = memoizedFilters.search.toLowerCase()
         filtered = filtered.filter(a =>
           a.title.toLowerCase().includes(searchLower) ||
           a.description.toLowerCase().includes(searchLower) ||
@@ -104,26 +114,26 @@ export function ApprovalsPage() {
       }
 
       // Tarih filtresi
-      if (filters.startDate) {
-        filtered = filtered.filter(a => new Date(a.requestedAt) >= filters.startDate!)
+      if (memoizedFilters.startDate) {
+        filtered = filtered.filter(a => new Date(a.requestedAt) >= memoizedFilters.startDate!)
       }
-      if (filters.endDate) {
-        filtered = filtered.filter(a => new Date(a.requestedAt) <= filters.endDate!)
+      if (memoizedFilters.endDate) {
+        filtered = filtered.filter(a => new Date(a.requestedAt) <= memoizedFilters.endDate!)
       }
 
       // Tutar filtresi
-      if (filters.minAmount !== undefined) {
-        filtered = filtered.filter(a => (a.amount || 0) >= filters.minAmount!)
+      if (memoizedFilters.minAmount !== undefined) {
+        filtered = filtered.filter(a => (a.amount || 0) >= memoizedFilters.minAmount!)
       }
-      if (filters.maxAmount !== undefined) {
-        filtered = filtered.filter(a => (a.amount || 0) <= filters.maxAmount!)
+      if (memoizedFilters.maxAmount !== undefined) {
+        filtered = filtered.filter(a => (a.amount || 0) <= memoizedFilters.maxAmount!)
       }
 
-      if (filters.status !== 'all') {
-        filtered = filtered.filter(a => a.status === filters.status)
+      if (memoizedFilters.status !== 'all') {
+        filtered = filtered.filter(a => a.status === memoizedFilters.status)
       }
-      if (filters.priority !== 'all') {
-        filtered = filtered.filter(a => a.priority === filters.priority)
+      if (memoizedFilters.priority !== 'all') {
+        filtered = filtered.filter(a => a.priority === memoizedFilters.priority)
       }
 
       setApprovals(filtered)
@@ -134,7 +144,7 @@ export function ApprovalsPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [filters, selectedFacility?.id])
+  }, [memoizedFilters, selectedFacility?.id])
 
   const { lastCheck } = useApprovalNotifications({
     enabled: true,

@@ -22,6 +22,7 @@ import {
 import { globalSearchService, type SearchResultGroup } from '@/services/globalSearchService'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { useDebounce } from '@/hooks/use-debounce'
 
 interface GlobalSearchProps {
   open: boolean
@@ -42,10 +43,13 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Debounce search - performans optimizasyonu
+  const debouncedSearch = useDebounce(searchQuery, 300)
+
   const { data: results, isLoading } = useQuery({
-    queryKey: ['global-search', searchQuery],
-    queryFn: () => globalSearchService.search(searchQuery, 20),
-    enabled: searchQuery.length >= 2,
+    queryKey: ['global-search', debouncedSearch],
+    queryFn: () => globalSearchService.search(debouncedSearch, 20),
+    enabled: debouncedSearch.length >= 2,
     staleTime: 30000,
   })
 
@@ -79,13 +83,13 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
         />
       </div>
       <CommandList>
-        {isLoading && searchQuery.length >= 2 && (
+        {isLoading && debouncedSearch.length >= 2 && (
           <div className="p-6 text-center text-sm text-muted-foreground">
             Aranıyor...
           </div>
         )}
         
-        {!isLoading && searchQuery.length < 2 && (
+        {!isLoading && debouncedSearch.length < 2 && (
           <div className="p-6 text-center">
             <MagnifyingGlass size={48} className="mx-auto text-muted-foreground mb-4 opacity-50" />
             <p className="text-sm text-muted-foreground">
@@ -103,13 +107,13 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
           </div>
         )}
 
-        {!isLoading && searchQuery.length >= 2 && results && results.length === 0 && (
+        {!isLoading && debouncedSearch.length >= 2 && results && results.length === 0 && (
           <CommandEmpty>
             <div className="p-6 text-center">
               <MagnifyingGlass size={48} className="mx-auto text-muted-foreground mb-4 opacity-50" />
               <p className="text-sm font-medium mb-1">Sonuç bulunamadı</p>
               <p className="text-xs text-muted-foreground">
-                "{searchQuery}" için arama sonucu bulunamadı
+                "{debouncedSearch}" için arama sonucu bulunamadı
               </p>
             </div>
           </CommandEmpty>

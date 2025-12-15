@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
@@ -72,15 +72,12 @@ export function ProjectsPage() {
   const selectedFacility = useAuthStore(state => state.selectedFacility)
 
   const { data: projects = [], isLoading } = useQuery({
-    queryKey: ['projects', statusFilter, selectedFacility?.id],
+    queryKey: ['projects', selectedFacility?.id],
     queryFn: async () => {
-      const data = await projectService.getProjects(selectedFacility?.id)
-      if (statusFilter !== 'all') {
-        return data.filter(p => p.status === statusFilter)
-      }
-      return data
+      return await projectService.getProjects(selectedFacility?.id)
     },
     enabled: !!selectedFacility?.id,
+    staleTime: 2 * 60 * 1000, // 2 dakika cache
   })
 
   const updateStatusMutation = useMutation({
@@ -118,15 +115,25 @@ export function ProjectsPage() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
+  // Memoized currency formatter
+  const formatCurrency = useCallback((amount: number) => {
     return new Intl.NumberFormat('tr-TR', {
       style: 'currency',
       currency: 'TRY',
       minimumFractionDigits: 0,
     }).format(amount)
-  }
+  }, [])
 
-  const ProjectCard = ({ project }: { project: Project }) => (
+  // Memoized filtered projects
+  const filteredProjects = useMemo(() => {
+    if (statusFilter !== 'all') {
+      return projects.filter(p => p.status === statusFilter)
+    }
+    return projects
+  }, [projects, statusFilter])
+
+  // Memoized ProjectCard component
+  const ProjectCard = memo(({ project }: { project: Project }) => (
     <motion.div
       whileHover={{ scale: 1.02, y: -4 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
@@ -222,7 +229,9 @@ export function ProjectsPage() {
         </CardContent>
       </Card>
     </motion.div>
-  )
+  ))
+
+  ProjectCard.displayName = 'ProjectCard'
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
@@ -308,7 +317,7 @@ export function ProjectsPage() {
         <>
           {viewMode === 'card' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects.map((project) => (
+              {filteredProjects.map((project) => (
                 <ProjectCard key={project.id} project={project} />
               ))}
             </div>
@@ -333,7 +342,7 @@ export function ProjectsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {projects.map((project) => (
+                      {filteredProjects.map((project) => (
                         <tr
                           key={project.id}
                           className="border-b hover:bg-muted/30 transition-colors cursor-pointer"
