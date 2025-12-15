@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { EmployeeDialog } from './components/EmployeeDialog'
+import { useDebounce } from '@/hooks/use-debounce'
 
 const employmentTypes: { value: EmploymentType; label: string }[] = [
   { value: 'full-time', label: 'Tam Zamanlı' },
@@ -65,16 +66,20 @@ export function EmployeesPage() {
   const selectedFacility = useAuthStore(state => state.selectedFacility)
   const queryClient = useQueryClient()
 
+  // Debounce search input - performans optimizasyonu
+  const debouncedSearch = useDebounce(search, 300)
+
   const { data: employees, isLoading } = useQuery({
-    queryKey: ['employees', { search, department, employmentType, status, facilityId: selectedFacility?.id }],
+    queryKey: ['employees', { search: debouncedSearch, department, employmentType, status, facilityId: selectedFacility?.id }],
     queryFn: () => employeeService.getEmployees({
-      search,
+      search: debouncedSearch,
       department: department === 'all' ? undefined : department,
       employmentType: employmentType === 'all' ? undefined : employmentType,
       status: status === 'all' ? undefined : status,
       facilityId: selectedFacility?.id,
     }),
     enabled: !!selectedFacility?.id,
+    staleTime: 2 * 60 * 1000, // 2 dakika cache
   })
 
   const { data: departments = [] } = useQuery({
@@ -83,11 +88,12 @@ export function EmployeesPage() {
     enabled: !!selectedFacility?.id,
   })
 
-  const getInitials = (firstName: string, lastName: string) => {
+  // Memoized helper functions - performans optimizasyonu
+  const getInitials = useCallback((firstName: string, lastName: string) => {
     return `${firstName[0]}${lastName[0]}`.toUpperCase()
-  }
+  }, [])
 
-  const getStatusBadge = (status: EmployeeStatus) => {
+  const getStatusBadge = useCallback((status: EmployeeStatus) => {
     const variants = {
       active: 'default',
       'on-leave': 'secondary',
@@ -101,28 +107,28 @@ export function EmployeesPage() {
     }
 
     return <Badge variant={variants[status]}>{labels[status]}</Badge>
-  }
+  }, [])
 
-  const getEmploymentTypeLabel = (type: EmploymentType) => {
+  const getEmploymentTypeLabel = useCallback((type: EmploymentType) => {
     const labels = {
       'full-time': 'Tam Zamanlı',
       'part-time': 'Yarı Zamanlı',
       'contract': 'Sözleşmeli',
     }
     return labels[type]
-  }
+  }, [])
 
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     setEditingEmployee(undefined)
     setDialogOpen(true)
-  }
+  }, [])
 
-  const handleEdit = (employee: Employee) => {
+  const handleEdit = useCallback((employee: Employee) => {
     setEditingEmployee(employee)
     setDialogOpen(true)
-  }
+  }, [])
 
-  const handleSave = async (data: Partial<Employee>) => {
+  const handleSave = useCallback(async (data: Partial<Employee>) => {
     if (!selectedFacility?.id) {
       toast.error('Lütfen önce bir tesis seçin')
       return
@@ -141,9 +147,9 @@ export function EmployeesPage() {
     }
     queryClient.invalidateQueries({ queryKey: ['employees'] })
     queryClient.invalidateQueries({ queryKey: ['departments'] })
-  }
+  }, [editingEmployee, selectedFacility?.id, queryClient])
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (window.confirm('Bu çalışanı silmek istediğinize emin misiniz?')) {
       try {
         await employeeService.deleteEmployee(id)
@@ -154,7 +160,12 @@ export function EmployeesPage() {
         toast.error('Bir hata oluştu')
       }
     }
-  }
+  }, [queryClient])
+
+  // Memoized filtered employees
+  const filteredEmployees = useMemo(() => {
+    return employees?.filter(employee => employee && employee.id) || []
+  }, [employees])
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
@@ -297,7 +308,7 @@ export function EmployeesPage() {
         )
       ) : viewMode === 'card' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {employees?.filter(employee => employee && employee.id).map((employee) => (
+          {filteredEmployees.map((employee) => (
             <motion.div
               key={employee.id}
               whileHover={{ y: -4, boxShadow: '0 12px 24px rgba(0,0,0,0.1)' }}
@@ -382,7 +393,7 @@ export function EmployeesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {employees?.filter(employee => employee && employee.id).map((employee) => (
+                {filteredEmployees.map((employee) => (
                   <TableRow key={employee.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">

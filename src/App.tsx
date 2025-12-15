@@ -10,6 +10,7 @@ import { MainLayout } from '@/components/layout/MainLayout'
 import { LoadingScreen } from '@/components/common/LoadingScreen'
 import { NotificationProvider } from '@/components/common/NotificationProvider'
 import { ModuleGuard } from '@/components/guards/ModuleGuard'
+import { logger } from '@/lib/logger'
 // Lazy load pages
 const LoginPage = lazy(() => import('@/features/auth/LoginPage').then(m => ({ default: m.LoginPage })))
 const RegisterPage = lazy(() => import('@/features/auth/RegisterPage').then(m => ({ default: m.RegisterPage })))
@@ -51,6 +52,14 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      // Cache optimizasyonları
+      staleTime: 5 * 60 * 1000, // 5 dakika - veri fresh kabul edilir
+      gcTime: 10 * 60 * 1000, // 10 dakika - cache'de tutulur (eski cacheTime)
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+    },
+    mutations: {
+      retry: 1,
     },
   },
 })
@@ -64,7 +73,7 @@ function App() {
     const checkEmailConfirmation = () => {
       const hash = window.location.hash
       if (hash && (hash.includes('type=signup') || hash.includes('type=email') || hash.includes('type=recovery'))) {
-        console.log('Email confirmation detected in hash')
+        logger.log('Email confirmation detected in hash')
         // Clear the hash and redirect to login
         supabase.auth.signOut().then(() => {
           window.location.href = '/login?confirmed=true'
@@ -81,7 +90,7 @@ function App() {
 
     // Global auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth event:', event)
+      logger.log('Auth event:', event)
 
       // Only handle explicit sign out
       if (event === 'SIGNED_OUT') {
@@ -109,7 +118,7 @@ function App() {
 
         // If coming from email confirmation (hash contains type or confirmed param exists)
         if (hash.includes('type=signup') || hash.includes('type=email') || hash.includes('access_token')) {
-          console.log('Email confirmation sign-in detected, redirecting to login')
+          logger.log('Email confirmation sign-in detected, redirecting to login')
           supabase.auth.signOut().then(() => {
             window.location.href = '/login?confirmed=true'
           })
