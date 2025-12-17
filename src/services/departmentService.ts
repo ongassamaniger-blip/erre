@@ -20,7 +20,18 @@ export const departmentService = {
    */
   async getDepartments(filters?: { facilityId?: string; isActive?: boolean }): Promise<Department[]> {
     try {
-      let query = supabase.from('departments').select('*')
+      // Optimize: Only select needed columns
+      let query = supabase.from('departments').select(`
+        id,
+        facility_id,
+        name,
+        description,
+        manager_id,
+        parent_department_id,
+        is_active,
+        created_at,
+        updated_at
+      `)
 
       if (filters?.facilityId) {
         query = query.eq('facility_id', filters.facilityId)

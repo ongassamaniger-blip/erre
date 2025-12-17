@@ -4,7 +4,30 @@ import type { Project, Task, Milestone, ProjectTeamMember, ProjectActivity } fro
 export const projectService = {
   async getProjects(facilityId?: string, isDeleted = false): Promise<Project[]> {
     try {
-      let query = supabase.from('projects').select('*')
+      // Optimize: Only select needed columns instead of *
+      let query = supabase.from('projects').select(`
+        id,
+        facility_id,
+        name,
+        description,
+        status,
+        priority,
+        start_date,
+        end_date,
+        budget,
+        spent_budget,
+        manager_id,
+        category_id,
+        type_id,
+        progress,
+        total_tasks,
+        completed_tasks,
+        total_team_members,
+        tags,
+        is_deleted,
+        created_at,
+        updated_at
+      `)
 
       if (facilityId) {
         query = query.eq('facility_id', facilityId)
@@ -97,9 +120,32 @@ export const projectService = {
 
   async getProjectById(id: string): Promise<Project | null> {
     try {
+      // Optimize: Only select needed columns
       const { data, error } = await supabase
         .from('projects')
-        .select('*')
+        .select(`
+          id,
+          facility_id,
+          name,
+          description,
+          status,
+          priority,
+          start_date,
+          end_date,
+          budget,
+          spent_budget,
+          manager_id,
+          category_id,
+          type_id,
+          progress,
+          total_tasks,
+          completed_tasks,
+          total_team_members,
+          tags,
+          is_deleted,
+          created_at,
+          updated_at
+        `)
         .eq('id', id)
         .single()
 

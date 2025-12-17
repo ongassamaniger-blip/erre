@@ -58,9 +58,29 @@ export const budgetService = {
     pagination?: PaginationParams
   ): Promise<PaginatedResponse<Budget>> {
     try {
+      // Optimize: Only select needed columns
       let query = supabase
         .from('budgets')
-        .select('*, departments(name), projects(name)', { count: 'exact' })
+        .select(`
+          id,
+          facility_id,
+          name,
+          year,
+          period,
+          total_amount,
+          spent_amount,
+          status,
+          currency,
+          start_date,
+          end_date,
+          department_id,
+          project_id,
+          category_id,
+          created_at,
+          updated_at,
+          departments(name),
+          projects(name)
+        `, { count: 'exact' })
 
       if (filters?.facilityId) {
         query = query.eq('facility_id', filters.facilityId)
@@ -109,9 +129,30 @@ export const budgetService = {
 
   async getAllBudgets(filters?: BudgetFilters): Promise<Budget[]> {
     try {
+      // Optimize: Only select needed columns + safety limit
       let query = supabase
         .from('budgets')
-        .select('*, departments(name), projects(name)')
+        .select(`
+          id,
+          facility_id,
+          name,
+          year,
+          period,
+          total_amount,
+          spent_amount,
+          status,
+          currency,
+          start_date,
+          end_date,
+          department_id,
+          project_id,
+          category_id,
+          created_at,
+          updated_at,
+          departments(name),
+          projects(name)
+        `)
+        .limit(10000) // Safety limit
 
       if (filters?.facilityId) {
         query = query.eq('facility_id', filters.facilityId)
@@ -147,7 +188,26 @@ export const budgetService = {
     try {
       const { data, error } = await supabase
         .from('budgets')
-        .select('*, departments(name), projects(name)')
+        .select(`
+          id,
+          facility_id,
+          name,
+          year,
+          period,
+          total_amount,
+          spent_amount,
+          status,
+          currency,
+          start_date,
+          end_date,
+          department_id,
+          project_id,
+          category_id,
+          created_at,
+          updated_at,
+          departments(name),
+          projects(name)
+        `)
         .eq('id', id)
         .single()
 

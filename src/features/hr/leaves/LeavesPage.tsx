@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Skeleton } from '@/components/ui/skeleton'
+import { TableSkeleton } from '@/components/common/skeletons'
 import {
   Select,
   SelectContent,
@@ -229,11 +229,7 @@ export function LeavesPage() {
       {isLoading ? (
         <Card>
           <CardContent className="p-6">
-            <div className="space-y-2">
-              {[...Array(6)].map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
+            <TableSkeleton rows={6} columns={8} />
           </CardContent>
         </Card>
       ) : viewMode === 'list' ? (

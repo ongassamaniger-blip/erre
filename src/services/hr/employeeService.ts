@@ -4,7 +4,24 @@ import type { Employee, EmployeeFilters } from '@/types/hr'
 export const employeeService = {
     async getEmployees(filters?: EmployeeFilters | string): Promise<Employee[]> {
         try {
-            let query = supabase.from('employees').select('*')
+            // Optimize: Only select needed columns
+            let query = supabase.from('employees').select(`
+              id,
+              facility_id,
+              first_name,
+              last_name,
+              email,
+              phone,
+              code,
+              position,
+              department,
+              status,
+              employment_type,
+              hire_date,
+              salary,
+              created_at,
+              updated_at
+            `)
 
             if (typeof filters === 'string') {
                 if (filters) query = query.eq('facility_id', filters)
@@ -32,7 +49,23 @@ export const employeeService = {
         try {
             const { data, error } = await supabase
                 .from('employees')
-                .select('*')
+                .select(`
+                  id,
+                  facility_id,
+                  first_name,
+                  last_name,
+                  email,
+                  phone,
+                  code,
+                  position,
+                  department,
+                  status,
+                  employment_type,
+                  hire_date,
+                  salary,
+                  created_at,
+                  updated_at
+                `)
                 .eq('id', id)
                 .single()
 

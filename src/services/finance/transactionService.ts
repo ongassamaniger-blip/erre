@@ -124,12 +124,13 @@ export const transactionService = {
     }
   },
 
-  // Get all transactions without pagination
+  // Get all transactions without pagination (with safety limit)
   async getAllTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
     try {
       let query = supabase
         .from('transactions')
         .select('*, categories(name), vendors_customers(name), departments(name), projects(name)')
+        .limit(10000) // Safety limit to prevent memory issues
 
       if (filters?.facilityId) {
         query = query.eq('facility_id', filters.facilityId)

@@ -55,7 +55,7 @@ interface NavItem {
   favorite?: boolean
 }
 
-const getNavItems = (isHeadquarters: boolean, t: (text: string) => string, enabledModules?: string[]): NavItem[] => {
+const getNavItems = (isHeadquarters: boolean, t: (text: string) => string, enabledModules?: string[], userRole?: string): NavItem[] => {
   const items: NavItem[] = [
     { title: t('Dashboard'), href: isHeadquarters ? '/headquarters/dashboard' : '/', icon: ChartBar, shortcut: 'D' },
   ]
@@ -96,12 +96,24 @@ const getNavItems = (isHeadquarters: boolean, t: (text: string) => string, enabl
       ]
     })
 
+    // Ayarlar menüsü (Genel Merkez için)
+    const hqSettingsChildren: NavItem[] = [
+      { title: t('Şube Ayarları'), href: '/headquarters/settings', icon: Gear },
+    ]
+    
+    // Kullanıcı Yönetimi (sadece Super Admin için, sadece Genel Merkez'de)
+    if (userRole === 'Super Admin') {
+      hqSettingsChildren.push({
+        title: t('Kullanıcı Yönetimi'),
+        href: '/settings/users',
+        icon: UserCircle,
+      })
+    }
+    
     items.push({
       title: t('Ayarlar Yönetimi'),
       icon: Gear,
-      children: [
-        { title: t('Şube Ayarları'), href: '/headquarters/settings', icon: Gear },
-      ]
+      children: hqSettingsChildren
     })
   } else {
     // Şube için normal menü
@@ -183,7 +195,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const isHeadquarters = selectedFacility?.type === 'headquarters'
   const enabledModules = selectedFacility?.enabledModules || (selectedFacility as any)?.enabled_modules
   const { t } = useTranslation()
-  const navItems = getNavItems(isHeadquarters, t, enabledModules)
+  const user = useAuthStore(state => state.user)
+  const navItems = getNavItems(isHeadquarters, t, enabledModules, user?.role)
 
   const [collapsed, setCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebar-collapsed')

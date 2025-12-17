@@ -10,6 +10,7 @@ import { MainLayout } from '@/components/layout/MainLayout'
 import { LoadingScreen } from '@/components/common/LoadingScreen'
 import { NotificationProvider } from '@/components/common/NotificationProvider'
 import { ModuleGuard } from '@/components/guards/ModuleGuard'
+import { SuperAdminGuard } from '@/components/guards/SuperAdminGuard'
 import { logger } from '@/lib/logger'
 // Lazy load pages
 const LoginPage = lazy(() => import('@/features/auth/LoginPage').then(m => ({ default: m.LoginPage })))
@@ -46,20 +47,33 @@ const PayrollPage = lazy(() => import('@/features/hr/payroll/PayrollPage').then(
 const DepartmentsPage = lazy(() => import('@/features/hr/departments/DepartmentsPage').then(m => ({ default: m.DepartmentsPage })))
 const CalendarPage = lazy(() => import('@/features/calendar/CalendarPage').then(m => ({ default: m.CalendarPage })))
 const BranchSettingsPage = lazy(() => import('@/features/settings/BranchSettingsPage').then(m => ({ default: m.BranchSettingsPage })))
+const UserManagementPage = lazy(() => import('@/features/settings/UserManagementPage').then(m => ({ default: m.UserManagementPage })))
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
-      // Cache optimizasyonları
-      staleTime: 5 * 60 * 1000, // 5 dakika - veri fresh kabul edilir
-      gcTime: 10 * 60 * 1000, // 10 dakika - cache'de tutulur (eski cacheTime)
-      refetchOnMount: true,
+      // Cache optimizasyonları - iyileştirildi
+      staleTime: 2 * 60 * 1000, // 2 dakika - veri fresh kabul edilir (daha agresif)
+      gcTime: 10 * 60 * 1000, // 10 dakika - cache'de tutulur
+      refetchOnMount: 'always', // Her zaman fresh data için refetch
       refetchOnReconnect: true,
+      // Performance: Structural sharing'i devre dışı bırak (büyük listeler için)
+      structuralSharing: (oldData, newData) => {
+        // Eğer data çok büyükse structural sharing'i atla
+        if (Array.isArray(oldData) && Array.isArray(newData) && oldData.length > 100) {
+          return newData
+        }
+        return oldData === newData ? oldData : newData
+      },
     },
     mutations: {
       retry: 1,
+      // Optimistic updates için
+      onError: (error) => {
+        console.error('Mutation error:', error)
+      },
     },
   },
 })
@@ -201,6 +215,14 @@ function App() {
                     <Route path="/approvals" element={<ApprovalsPage />} />
                     <Route path="/calendar" element={<CalendarPage />} />
                     <Route path="/settings/branch" element={<BranchSettingsPage />} />
+                    <Route 
+                      path="/settings/users" 
+                      element={
+                        <SuperAdminGuard requireHeadquarters>
+                          <UserManagementPage />
+                        </SuperAdminGuard>
+                      } 
+                    />
                   </Route>
                 </Route>
               </Route>

@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { DotsThree, Eye, PencilSimple, Trash, Printer, FileText, CheckCircle, XCircle, MicrosoftExcelLogo } from '@phosphor-icons/react'
-import { Skeleton } from '@/components/ui/skeleton'
+import { TableSkeleton } from '@/components/common/skeletons'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
@@ -167,13 +167,7 @@ export function TransactionTable({
   }
 
   if (isLoading) {
-    return (
-      <div className="p-4 space-y-3">
-        {[...Array(pageSize)].map((_, i) => (
-          <Skeleton key={i} className="h-12 w-full" />
-        ))}
-      </div>
-    )
+    return <TableSkeleton rows={pageSize} columns={9} />
   }
 
   return (

@@ -278,9 +278,159 @@ export const reportService = {
   },
 
   async generateCashFlowReport(parameters: ReportParameter): Promise<ReportResult> {
-    // Nakit akış raporu için transaction verilerini kullan
-    // Şimdilik income-expense raporu ile aynı mantığı kullanıyoruz ama gelecekte farklılaşabilir
-    return this.generateIncomeExpenseReport(parameters)
+    // Nakit akış raporu - giriş/çıkış bazlı analiz
+    const transactions = await transactionService.getAllTransactions({
+      facilityId: parameters.facilityId,
+      startDate: parameters.startDate.toISOString().split('T')[0],
+      endDate: parameters.endDate.toISOString().split('T')[0],
+    })
+
+    // Önceki dönem verileri
+    const prevStartDate = new Date(parameters.startDate)
+    const prevEndDate = new Date(parameters.endDate)
+    const duration = prevEndDate.getTime() - prevStartDate.getTime()
+    prevStartDate.setTime(prevStartDate.getTime() - duration - 86400000) // 1 gün önce
+    prevEndDate.setTime(prevStartDate.getTime() + duration)
+
+    const previousPeriodTransactions = await transactionService.getAllTransactions({
+      facilityId: parameters.facilityId,
+      startDate: format(prevStartDate, 'yyyy-MM-dd'),
+      endDate: format(prevEndDate, 'yyyy-MM-dd'),
+    })
+
+    // Girişler (income) ve çıkışlar (expense)
+    const cashInflows = transactions.filter(t => t.type === 'income' && t.status === 'approved')
+    const cashOutflows = transactions.filter(t => t.type === 'expense' && t.status === 'approved')
+
+    const totalInflow = cashInflows.reduce((sum, t) => sum + t.amountInBaseCurrency, 0)
+    const totalOutflow = cashOutflows.reduce((sum, t) => sum + t.amountInBaseCurrency, 0)
+    const netCashFlow = totalInflow - totalOutflow
+
+    // Önceki dönem
+    const prevInflows = previousPeriodTransactions.filter(t => t.type === 'income' && t.status === 'approved')
+    const prevOutflows = previousPeriodTransactions.filter(t => t.type === 'expense' && t.status === 'approved')
+    const prevTotalInflow = prevInflows.reduce((sum, t) => sum + t.amountInBaseCurrency, 0)
+    const prevTotalOutflow = prevOutflows.reduce((sum, t) => sum + t.amountInBaseCurrency, 0)
+
+    // Trend hesaplamaları
+    const inflowChange = prevTotalInflow > 0
+      ? ((totalInflow - prevTotalInflow) / prevTotalInflow) * 100
+      : totalInflow > 0 ? 100 : 0
+    const outflowChange = prevTotalOutflow > 0
+      ? ((totalOutflow - prevTotalOutflow) / prevTotalOutflow) * 100
+      : totalOutflow > 0 ? 100 : 0
+
+    // Gruplandırma (gün/hafta/ay/yıl)
+    const groupBy = parameters.groupBy || 'month'
+    const dateGroups = new Map<string, { inflow: number; outflow: number }>()
+
+    const addToGroup = (date: Date, amount: number, type: 'inflow' | 'outflow') => {
+      let key = ''
+      if (groupBy === 'day') {
+        key = format(date, 'yyyy-MM-dd')
+      } else if (groupBy === 'week') {
+        const weekStart = new Date(date)
+        weekStart.setDate(date.getDate() - date.getDay())
+        key = format(weekStart, 'yyyy-MM-dd')
+      } else if (groupBy === 'month') {
+        key = format(date, 'yyyy-MM')
+      } else if (groupBy === 'year') {
+        key = format(date, 'yyyy')
+      }
+
+      if (!dateGroups.has(key)) {
+        dateGroups.set(key, { inflow: 0, outflow: 0 })
+      }
+      const data = dateGroups.get(key)!
+      if (type === 'inflow') {
+        data.inflow += amount
+      } else {
+        data.outflow += amount
+      }
+    }
+
+    cashInflows.forEach(t => {
+      addToGroup(new Date(t.date), t.amountInBaseCurrency, 'inflow')
+    })
+
+    cashOutflows.forEach(t => {
+      addToGroup(new Date(t.date), t.amountInBaseCurrency, 'outflow')
+    })
+
+    // Sıralı gruplar
+    const sortedGroups = Array.from(dateGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+    const labels = sortedGroups.map(([key]) => {
+      if (groupBy === 'day') {
+        return format(new Date(key), 'dd MMM')
+      } else if (groupBy === 'week') {
+        return format(new Date(key), 'dd MMM')
+      } else if (groupBy === 'month') {
+        const [year, month] = key.split('-')
+        const months = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara']
+        return months[parseInt(month) - 1]
+      } else {
+        return key
+      }
+    })
+    const inflowData = sortedGroups.map(([, data]) => data.inflow)
+    const outflowData = sortedGroups.map(([, data]) => data.outflow)
+
+    // Kategori bazlı tablo (nakit akışı için)
+    const categoryMap = new Map<string, { inflow: number; outflow: number; name: string }>()
+    const allCategories = await categoryService.getCategories({ facilityId: parameters.facilityId })
+    
+    allCategories.forEach(cat => {
+      categoryMap.set(cat.id, { inflow: 0, outflow: 0, name: cat.name })
+    })
+
+    cashInflows.forEach(t => {
+      const catId = t.categoryId
+      if (!categoryMap.has(catId)) {
+        categoryMap.set(catId, { inflow: 0, outflow: 0, name: t.categoryName || 'Diğer' })
+      }
+      categoryMap.get(catId)!.inflow += t.amountInBaseCurrency
+    })
+
+    cashOutflows.forEach(t => {
+      const catId = t.categoryId
+      if (!categoryMap.has(catId)) {
+        categoryMap.set(catId, { inflow: 0, outflow: 0, name: t.categoryName || 'Diğer' })
+      }
+      categoryMap.get(catId)!.outflow += t.amountInBaseCurrency
+    })
+
+    const tableData: CategoryReportRow[] = Array.from(categoryMap.values())
+      .map(data => {
+        const net = data.inflow - data.outflow
+        const total = totalInflow + totalOutflow
+        const percentage = total > 0 ? ((data.inflow + data.outflow) / total) * 100 : 0
+
+        return {
+          category: data.name,
+          income: data.inflow,
+          expense: data.outflow,
+          net,
+          percentage,
+        }
+      })
+      .filter(row => row.income !== 0 || row.expense !== 0)
+      .sort((a, b) => Math.abs(b.income + b.expense) - Math.abs(a.income + a.expense))
+
+    return {
+      summary: {
+        totalIncome: totalInflow,
+        totalExpense: totalOutflow,
+        net: netCashFlow,
+        incomeChange: inflowChange,
+        expenseChange: outflowChange,
+      },
+      chartData: {
+        labels,
+        income: inflowData,
+        expense: outflowData,
+      },
+      tableData,
+    }
   },
 
   async generateBudgetRealizationReport(parameters: ReportParameter): Promise<ReportResult> {
@@ -577,109 +727,119 @@ export const reportService = {
 
   async getDashboardSummary(facilityId: string, dateRange?: { from: Date; to: Date }): Promise<DashboardSummary> {
     try {
-      // RPC returning incorrect data, using fallback directly
-      // TODO: Fix RPC function to correctly calculate activeProjects
-      return this.getDashboardSummaryFallback(facilityId)
-
-      /* Disabled RPC - was returning incorrect project counts
-      // 1. Try to get summary from RPC first for performance
+      // Try to get summary from RPC first for performance
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_dashboard_summary', {
         p_facility_id: facilityId,
-        p_start_date: dateRange?.from?.toISOString(),
-        p_end_date: dateRange?.to?.toISOString()
+        p_start_date: dateRange?.from?.toISOString() || null,
+        p_end_date: dateRange?.to?.toISOString() || null
       })
       
       if (!rpcError && rpcData) {
-        // We still need to calculate trends (monthly changes) as the RPC currently only returns totals
-        // For now, we can fetch just the necessary data for trends or expand the RPC later.
-        // To keep it robust, let's mix RPC totals with client-side trend calculation for now,
-        // but significantly reduce the data fetched if possible.
-      
-        // Actually, to fully utilize RPC, we should move trend calc there too.
-        // But for this step, let's use the RPC values for the main cards and keep the existing logic 
-        // for charts/trends but maybe optimized?
-      
-        // Let's stick to the existing logic for trends to ensure we don't break charts,
-        // but use RPC for the absolute totals to ensure consistency with the DB.
-      
-        // Re-using existing logic for trends but overriding totals with RPC data
-      
-        // Helper to get date ranges
-        const now = new Date()
-        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-        const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
-        const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-        const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
-      
-        // Helper to calculate trend
-        const getTrend = (current: number, previous: number) => {
-          if (previous === 0) return current > 0 ? 100 : 0
-          return ((current - previous) / previous) * 100
-        }
-      
-        // ... (Existing trend logic needs to be preserved or re-implemented)
-        // Since we want to optimize, let's just return the RPC data and mock trends for now 
-        // OR fetch minimal data for trends.
-      
-        // For the purpose of this task (Optimization), let's assume we want to rely on RPC.
-        // But the UI expects trends.
-      
-        // Let's return the RPC data structure mapped to DashboardSummary
-        // and default trends to 0 until we update RPC to handle them.
-      
+        // RPC returns most data, but we still need employeeDetails from fallback
+        // Fetch employee details separately (lightweight query)
+        const employeeDetails = await this.getEmployeeDetailsForDashboard(facilityId)
+        
+        // Map RPC data to DashboardSummary format
         return {
           finance: {
-            totalIncome: rpcData.finance.totalIncome,
-            totalExpense: rpcData.finance.totalExpense,
-            netIncome: rpcData.finance.netIncome,
-            incomeChange: 0, // TODO: Add to RPC
-            expenseChange: 0, // TODO: Add to RPC
-            monthlyTrend: [], // TODO: Add to RPC or separate endpoint
-            pendingTransactions: 0, // TODO: Add to RPC
-            categoryExpenses: [], // TODO: Add to RPC
-            categoryIncomes: [] // TODO: Add to RPC
+            totalIncome: rpcData.finance?.totalIncome || 0,
+            totalExpense: rpcData.finance?.totalExpense || 0,
+            netIncome: rpcData.finance?.netIncome || 0,
+            incomeChange: rpcData.finance?.incomeChange || 0,
+            expenseChange: rpcData.finance?.expenseChange || 0,
+            monthlyTrend: (rpcData.finance?.monthlyTrend || []).map((item: any) => ({
+              name: item.name,
+              income: item.income || 0,
+              expense: item.expense || 0
+            })),
+            pendingTransactions: rpcData.finance?.pendingTransactions || 0,
+            categoryExpenses: (rpcData.finance?.categoryExpenses || []).map((item: any) => ({
+              category: item.category || 'Diğer',
+              amount: item.amount || 0,
+              percentage: item.percentage || 0,
+              change: item.change || 0
+            })),
+            categoryIncomes: (rpcData.finance?.categoryIncomes || []).map((item: any) => ({
+              category: item.category || 'Diğer',
+              amount: item.amount || 0,
+              percentage: item.percentage || 0,
+              change: item.change || 0
+            }))
           },
           hr: {
-            totalEmployees: rpcData.hr.totalEmployees,
-            activeEmployees: rpcData.hr.activeEmployees,
-            leaveCount: rpcData.hr.leaveCount,
-            totalSalaries: 0, // TODO: Add to RPC
-            employeeChange: 0, // TODO: Add to RPC
-            employeeDetails: [] // Keep empty or fetch separately if needed
+            totalEmployees: rpcData.hr?.totalEmployees || 0,
+            activeEmployees: rpcData.hr?.activeEmployees || 0,
+            leaveCount: rpcData.hr?.leaveCount || 0,
+            totalSalaries: rpcData.hr?.totalSalaries || 0,
+            employeeChange: rpcData.hr?.employeeChange || 0,
+            employeeDetails
           },
           projects: {
-            totalProjects: rpcData.projects.totalProjects,
-            activeProjects: rpcData.projects.activeProjects,
-            completedProjects: rpcData.projects.completedProjects,
-            totalBudget: rpcData.projects.totalBudget,
-            totalSpent: rpcData.projects.totalSpent,
-            projectChange: 0 // TODO: Add to RPC
+            totalProjects: rpcData.projects?.totalProjects || 0,
+            activeProjects: rpcData.projects?.activeProjects || 0,
+            completedProjects: rpcData.projects?.completedProjects || 0,
+            totalBudget: rpcData.projects?.totalBudget || 0,
+            totalSpent: rpcData.projects?.totalSpent || 0,
+            projectChange: rpcData.projects?.projectChange || 0
           },
           qurban: {
-            totalShares: rpcData.qurban.totalShares,
-            totalDonations: rpcData.qurban.totalDonations,
-            slaughteredCount: rpcData.qurban.slaughteredCount,
-            distributedCount: rpcData.qurban.distributedCount,
-            shareChange: 0, // TODO: Add to RPC
-            donationChange: 0 // TODO: Add to RPC
+            totalShares: rpcData.qurban?.totalShares || 0,
+            totalDonations: rpcData.qurban?.totalDonations || 0,
+            slaughteredCount: rpcData.qurban?.slaughteredCount || 0,
+            distributedCount: rpcData.qurban?.distributedCount || 0,
+            shareChange: rpcData.qurban?.shareChange || 0,
+            donationChange: rpcData.qurban?.donationChange || 0
           },
           donations: {
-            totalAmount: rpcData.qurban.totalDonations,
-            donorCount: 0, // TODO: Add to RPC
-            monthlyTrend: [],
-                amountChange: 0
-              }
-            }
+            totalAmount: rpcData.qurban?.totalDonations || 0,
+            donorCount: rpcData.qurban?.totalDonors || 0,
+            monthlyTrend: [], // Can be added to RPC later if needed
+            amountChange: rpcData.qurban?.donationChange || 0
           }
+        }
+      }
       
-          // Fallback to existing slow logic if RPC fails
-          console.warn('RPC failed, falling back to client-side calculation', rpcError)
-          return this.getDashboardSummaryFallback(facilityId)
-          Disabled RPC ends here */
+      // Fallback to existing logic if RPC fails
+      console.warn('RPC failed, falling back to client-side calculation', rpcError)
+      return this.getDashboardSummaryFallback(facilityId)
 
     } catch (error) {
       console.error('Get dashboard summary error:', error)
-      throw error
+      // Fallback on error
+      return this.getDashboardSummaryFallback(facilityId)
+    }
+  },
+
+  // Helper to get employee details (lightweight query)
+  async getEmployeeDetailsForDashboard(facilityId: string) {
+    try {
+      const employees = await employeeService.getEmployees({ facilityId })
+      
+      // Fetch approved leave requests
+      const { data: leaveRequests } = await supabase
+        .from('leave_requests')
+        .select('*')
+        .eq('facility_id', facilityId)
+        .eq('status', 'approved')
+
+      return employees.map(emp => {
+        const empLeaves = leaveRequests?.filter(l => l.employee_id === emp.id) || []
+        const totalLeaveDays = empLeaves.reduce((sum, l) => sum + (l.total_days || 0), 0)
+
+        return {
+          id: emp.id,
+          name: `${emp.firstName} ${emp.lastName}`,
+          department: emp.department || '-',
+          position: emp.position || '-',
+          status: emp.status,
+          joinDate: emp.hireDate || emp.createdAt,
+          leaveDays: totalLeaveDays,
+          salary: emp.salary?.amount || 0
+        }
+      })
+    } catch (error) {
+      console.error('Get employee details error:', error)
+      return []
     }
   },
 

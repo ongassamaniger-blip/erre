@@ -12,7 +12,7 @@ import { transactionService } from '@/services/finance/transactionService'
 import { BudgetCard } from './components/BudgetCard'
 import { BudgetDetailModal } from './components/BudgetDetailModal'
 import { BudgetDialog } from './components/BudgetDialog'
-import { Skeleton } from '@/components/ui/skeleton'
+import { GridSkeleton } from '@/components/common/skeletons'
 import { FunnelSimple, Plus } from '@phosphor-icons/react'
 import { departmentService } from '@/services/departmentService'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -234,11 +234,7 @@ export function BudgetsPage() {
       </Card>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(pageSize)].map((_, i) => (
-            <Skeleton key={i} className="h-64" />
-          ))}
-        </div>
+        <GridSkeleton count={pageSize} columns={3} />
       ) : data && data.data.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {data.data.map((budget) => (
