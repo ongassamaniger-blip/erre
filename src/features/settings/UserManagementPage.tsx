@@ -63,7 +63,11 @@ import { TableSkeleton } from '@/components/common/skeletons'
 import { CreateUserDialog } from './components/CreateUserDialog'
 import { EditUserDialog } from './components/EditUserDialog'
 import { UserDetailDialog } from './components/UserDetailDialog'
+import { CreateRoleDialog } from './components/CreateRoleDialog'
+import { EditRoleDialog } from './components/EditRoleDialog'
+import { RoleDetailDialog } from './components/RoleDetailDialog'
 import { useTranslation } from '@/hooks/useTranslation'
+import { roleManagementService, type Role } from '@/services/roleManagementService'
 
 const roleColors: Record<SystemRole, string> = {
   'Super Admin': 'bg-red-500/10 text-red-700 border-red-200',
@@ -90,6 +94,11 @@ export function UserManagementPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null)
+  const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users')
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null)
+  const [createRoleDialogOpen, setCreateRoleDialogOpen] = useState(false)
+  const [editRoleDialogOpen, setEditRoleDialogOpen] = useState(false)
+  const [roleDetailDialogOpen, setRoleDetailDialogOpen] = useState(false)
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['system-users'],
@@ -99,6 +108,13 @@ export function UserManagementPage() {
   const { data: facilities = [] } = useQuery({
     queryKey: ['facilities'],
     queryFn: () => facilityService.getFacilities(),
+  })
+
+  // Rolleri getir (sadece Super Admin için)
+  const { data: roles = [] } = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => roleManagementService.getRoles(),
+    enabled: currentUser?.role === 'Super Admin',
   })
 
   const deleteMutation = useMutation({
@@ -221,13 +237,53 @@ export function UserManagementPage() {
               {t('Sistem kullanıcılarını yönetin, roller ve yetkileri düzenleyin')}
             </p>
           </div>
-          <Button onClick={handleCreateUser}>
-            <Plus size={20} className="mr-2" />
-            {t('Yeni Kullanıcı')}
-          </Button>
+          <div className="flex gap-2">
+            {activeTab === 'users' ? (
+              <Button onClick={handleCreateUser}>
+                <Plus size={20} className="mr-2" />
+                {t('Yeni Kullanıcı')}
+              </Button>
+            ) : currentUser?.role === 'Super Admin' ? (
+              <Button onClick={() => setCreateRoleDialogOpen(true)}>
+                <Plus size={20} className="mr-2" />
+                Yeni Rol
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
 
+      {/* Tabs */}
+      {currentUser?.role === 'Super Admin' && (
+        <div className="border-b">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+                activeTab === 'users'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Kullanıcılar
+            </button>
+            <button
+              onClick={() => setActiveTab('roles')}
+              className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+                activeTab === 'roles'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Roller
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* User Management Tab */}
+      {activeTab === 'users' && (
+        <>
       {/* Filtreler */}
       <Card>
         <CardContent className="pt-6">
@@ -473,7 +529,183 @@ export function UserManagementPage() {
           />
         </>
       )}
+        </>
+      )}
+
+      {/* Role Management Tab */}
+      {activeTab === 'roles' && currentUser?.role === 'Super Admin' && (
+        <RoleManagementTab
+          roles={roles}
+          selectedRole={selectedRole}
+          setSelectedRole={setSelectedRole}
+          createRoleDialogOpen={createRoleDialogOpen}
+          setCreateRoleDialogOpen={setCreateRoleDialogOpen}
+          editRoleDialogOpen={editRoleDialogOpen}
+          setEditRoleDialogOpen={setEditRoleDialogOpen}
+          roleDetailDialogOpen={roleDetailDialogOpen}
+          setRoleDetailDialogOpen={setRoleDetailDialogOpen}
+          queryClient={queryClient}
+        />
+      )}
+
+      {/* Role Dialogs */}
+      <CreateRoleDialog
+        open={createRoleDialogOpen}
+        onOpenChange={setCreateRoleDialogOpen}
+        onSuccess={() => {
+          setCreateRoleDialogOpen(false)
+          queryClient.invalidateQueries({ queryKey: ['roles'] })
+        }}
+      />
+
+      {selectedRole && (
+        <>
+          <EditRoleDialog
+            open={editRoleDialogOpen}
+            onOpenChange={setEditRoleDialogOpen}
+            role={selectedRole}
+            onSuccess={() => {
+              setEditRoleDialogOpen(false)
+              setSelectedRole(null)
+              queryClient.invalidateQueries({ queryKey: ['roles'] })
+            }}
+          />
+
+          <RoleDetailDialog
+            open={roleDetailDialogOpen}
+            onOpenChange={setRoleDetailDialogOpen}
+            role={selectedRole}
+          />
+        </>
+      )}
     </div>
+  )
+}
+
+// Role Management Tab Component
+function RoleManagementTab({
+  roles,
+  selectedRole,
+  setSelectedRole,
+  createRoleDialogOpen,
+  setCreateRoleDialogOpen,
+  editRoleDialogOpen,
+  setEditRoleDialogOpen,
+  roleDetailDialogOpen,
+  setRoleDetailDialogOpen,
+  queryClient,
+}: {
+  roles: Role[]
+  selectedRole: Role | null
+  setSelectedRole: (role: Role | null) => void
+  createRoleDialogOpen: boolean
+  setCreateRoleDialogOpen: (open: boolean) => void
+  editRoleDialogOpen: boolean
+  setEditRoleDialogOpen: (open: boolean) => void
+  roleDetailDialogOpen: boolean
+  setRoleDetailDialogOpen: (open: boolean) => void
+  queryClient: any
+}) {
+  const handleDelete = async (role: Role) => {
+    if (role.isSystemRole) {
+      toast.error('Sistem rolleri silinemez')
+      return
+    }
+
+    if (!confirm(`"${role.name}" rolünü silmek istediğinize emin misiniz?`)) {
+      return
+    }
+
+    try {
+      await roleManagementService.deleteRole(role.id)
+      toast.success('Rol başarıyla silindi')
+      queryClient.invalidateQueries({ queryKey: ['roles'] })
+    } catch (error: any) {
+      toast.error(error.message || 'Rol silinirken hata oluştu')
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Roller</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {roles.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Shield size={48} className="mx-auto mb-4 opacity-50" />
+            <p>Henüz rol oluşturulmamış</p>
+          </div>
+        ) : (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Rol Adı</TableHead>
+                  <TableHead>Açıklama</TableHead>
+                  <TableHead>Tip</TableHead>
+                  <TableHead>Oluşturulma</TableHead>
+                  <TableHead className="text-right">İşlemler</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {roles.map((role) => (
+                  <TableRow key={role.id}>
+                    <TableCell className="font-medium">{role.name}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {role.description || '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={role.isSystemRole ? 'default' : 'secondary'}>
+                        {role.isSystemRole ? 'Sistem Rolü' : 'Özel Rol'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(role.createdAt).toLocaleDateString('tr-TR')}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedRole(role)
+                            setRoleDetailDialogOpen(true)
+                          }}
+                        >
+                          <Eye size={16} />
+                        </Button>
+                        {!role.isSystemRole && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedRole(role)
+                                setEditRoleDialogOpen(true)
+                              }}
+                            >
+                              <Pencil size={16} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(role)}
+                            >
+                              <Trash size={16} />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
