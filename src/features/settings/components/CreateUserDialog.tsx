@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
+import { useQuery } from '@tanstack/react-query'
+import { roleManagementService } from '@/services/roleManagementService'
 import {
   Dialog,
   DialogContent,
@@ -40,8 +42,8 @@ const createUserSchema = z.object({
   email: z.string().email('Geçerli bir e-posta adresi girin'),
   password: z.string().min(8, 'Şifre en az 8 karakter olmalı'),
   name: z.string().min(2, 'İsim en az 2 karakter olmalı'),
-  role: z.enum(['Super Admin', 'Admin', 'Manager', 'User']),
   facilityIds: z.array(z.string()).min(1, 'En az bir tesis seçmelisiniz'),
+  facilityRoles: z.record(z.string(), z.string()).optional(), // facilityId -> roleId mapping
   sendInviteEmail: z.boolean().optional(),
 })
 
@@ -61,7 +63,14 @@ export function CreateUserDialog({
   onSuccess,
 }: CreateUserDialogProps) {
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([])
+  const [facilityRoles, setFacilityRoles] = useState<Record<string, string>>({}) // facilityId -> roleId
   const [isLoading, setIsLoading] = useState(false)
+
+  // Rolleri getir
+  const { data: roles = [] } = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => roleManagementService.getRoles(),
+  })
 
   const form = useForm<CreateUserFormData>({
     resolver: zodResolver(createUserSchema),
@@ -69,8 +78,8 @@ export function CreateUserDialog({
       email: '',
       password: '',
       name: '',
-      role: 'User' as const,
       facilityIds: [],
+      facilityRoles: {},
       sendInviteEmail: false,
     },
   })
@@ -85,13 +94,31 @@ export function CreateUserDialog({
         throw new Error('Oturum bulunamadı')
       }
 
+      // Varsayılan sistem rolü: İlk tesis için seçilen rolün sistem rolüne göre belirlenir
+      // Eğer özel rol seçildiyse, o rolün sistem rolüne göre eşleştirme yapılır
+      let defaultSystemRole = 'User' // Varsayılan
+      
+      // İlk tesis için seçilen rolü kontrol et
+      if (data.facilityIds.length > 0 && facilityRoles[data.facilityIds[0]]) {
+        const firstRoleId = facilityRoles[data.facilityIds[0]]
+        const selectedRole = roles.find(r => r.id === firstRoleId)
+        
+        // Eğer sistem rolü seçildiyse onu kullan, değilse varsayılan 'User'
+        if (selectedRole) {
+          const systemRoleNames = ['Super Admin', 'Admin', 'Manager', 'User']
+          if (systemRoleNames.includes(selectedRole.name)) {
+            defaultSystemRole = selectedRole.name
+          }
+        }
+      }
+
       // Edge Function'ı çağır
       const { data: functionData, error: functionError } = await supabase.functions.invoke('create-user', {
         body: {
           email: data.email,
           password: data.password,
           name: data.name,
-          role: data.role,
+          role: defaultSystemRole,
           facilityIds: data.facilityIds,
         },
         headers: {
@@ -105,10 +132,39 @@ export function CreateUserDialog({
         throw new Error('Kullanıcı oluşturma için Edge Function gerekli. Lütfen Supabase Dashboard\'dan kullanıcı oluşturun veya Edge Function ekleyin.')
       }
 
-      if (functionData?.success) {
+      if (functionData?.success && functionData?.userId) {
+        // Kullanıcı oluşturulduktan sonra tesis bazlı roller atanıyor
+        const userId = functionData.userId
+        
+        // Her tesis için rol atama (rol seçilmemişse varsayılan rol kullan)
+        for (const facilityId of data.facilityIds) {
+          let roleId = facilityRoles[facilityId]
+          
+          // Eğer rol seçilmemişse, sistem rolü bul (User rolü)
+          if (!roleId) {
+            const defaultRole = roles.find(r => r.name === 'User')
+            if (defaultRole) {
+              roleId = defaultRole.id
+            } else {
+              // User rolü yoksa ilk rolü kullan
+              roleId = roles[0]?.id
+            }
+          }
+          
+          if (roleId) {
+            try {
+              await roleManagementService.assignRoleToUser(userId, facilityId, roleId)
+            } catch (error: any) {
+              console.error(`Rol atama hatası (${facilityId}):`, error)
+              toast.error(`${facilityId} tesisine rol atanırken hata oluştu`)
+            }
+          }
+        }
+
         toast.success('Kullanıcı başarıyla oluşturuldu')
         form.reset()
         setSelectedFacilities([])
+        setFacilityRoles({})
         onSuccess()
       } else {
         throw new Error(functionData?.error || 'Kullanıcı oluşturulamadı')
@@ -126,8 +182,25 @@ export function CreateUserDialog({
         ? prev.filter(id => id !== facilityId)
         : [...prev, facilityId]
       form.setValue('facilityIds', newFacilities)
+      
+      // Tesis seçimi kaldırıldıysa rolünü de kaldır
+      if (!newFacilities.includes(facilityId)) {
+        setFacilityRoles(prev => {
+          const newRoles = { ...prev }
+          delete newRoles[facilityId]
+          return newRoles
+        })
+      }
+      
       return newFacilities
     })
+  }
+
+  const handleRoleChange = (facilityId: string, roleId: string) => {
+    setFacilityRoles(prev => ({
+      ...prev,
+      [facilityId]: roleId,
+    }))
   }
 
   return (
@@ -172,72 +245,81 @@ export function CreateUserDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Şifre *</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="En az 8 karakter" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Rol *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Rol seçin" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Super Admin">Super Admin</SelectItem>
-                        <SelectItem value="Admin">Admin</SelectItem>
-                        <SelectItem value="Manager">Manager</SelectItem>
-                        <SelectItem value="User">User</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Şifre *</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="En az 8 karakter" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
               name="facilityIds"
               render={() => (
                 <FormItem>
-                  <FormLabel>Tesis Erişimleri *</FormLabel>
+                  <FormLabel>Tesis Erişimleri ve Rolleri *</FormLabel>
                   <FormControl>
-                    <ScrollArea className="h-48 border rounded-md p-4">
-                      <div className="space-y-2">
-                        {facilities.map((facility) => (
-                          <div key={facility.id} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`facility-${facility.id}`}
-                              checked={selectedFacilities.includes(facility.id)}
-                              onCheckedChange={() => toggleFacility(facility.id)}
-                            />
-                            <Label
-                              htmlFor={`facility-${facility.id}`}
-                              className="flex items-center gap-2 cursor-pointer flex-1"
-                            >
-                              <Building size={16} />
-                              <span className="font-medium">{facility.name}</span>
-                              <span className="text-muted-foreground">({facility.code})</span>
-                            </Label>
-                          </div>
-                        ))}
+                    <ScrollArea className="h-64 border rounded-md p-4">
+                      <div className="space-y-4">
+                        {facilities.map((facility) => {
+                          const isSelected = selectedFacilities.includes(facility.id)
+                          const selectedRoleId = facilityRoles[facility.id]
+                          
+                          return (
+                            <div key={facility.id} className="space-y-2 border-b pb-3 last:border-0">
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`facility-${facility.id}`}
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleFacility(facility.id)}
+                                />
+                                <Label
+                                  htmlFor={`facility-${facility.id}`}
+                                  className="flex items-center gap-2 cursor-pointer flex-1"
+                                >
+                                  <Building size={16} />
+                                  <span className="font-medium">{facility.name}</span>
+                                  <span className="text-muted-foreground">({facility.code})</span>
+                                </Label>
+                              </div>
+                              
+                              {isSelected && (
+                                <div className="ml-6">
+                                  <Label className="text-sm text-muted-foreground mb-1 block">
+                                    Bu tesiste rol:
+                                  </Label>
+                                  <Select
+                                    value={selectedRoleId || ''}
+                                    onValueChange={(value) => handleRoleChange(facility.id, value)}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Rol seçin" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {roles.map((role) => (
+                                        <SelectItem key={role.id} value={role.id}>
+                                          {role.name}
+                                          {role.isSystemRole && (
+                                            <span className="text-xs text-muted-foreground ml-2">
+                                              (Sistem)
+                                            </span>
+                                          )}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </ScrollArea>
                   </FormControl>

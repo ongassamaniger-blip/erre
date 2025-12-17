@@ -134,7 +134,8 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ 
-        success: true, 
+        success: true,
+        userId: authUser.user.id,
         user: {
           id: authUser.user.id,
           email: authUser.user.email
