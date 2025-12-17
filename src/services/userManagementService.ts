@@ -188,12 +188,20 @@ export const userManagementService = {
       })
 
       if (functionError) {
-        // Edge Function yoksa veya hata varsa, alternatif yöntem
+        console.error('Edge Function error:', functionError)
         throw new Error(functionError.message || 'Kullanıcı oluşturulamadı. Edge Function kontrol edin.')
       }
 
-      if (!functionData?.success) {
-        throw new Error(functionData?.error || 'Kullanıcı oluşturulamadı')
+      // Edge Function başarısız response döndürdüyse
+      if (functionData && !functionData.success) {
+        console.error('Edge Function returned error:', functionData)
+        throw new Error(functionData.error || 'Kullanıcı oluşturulamadı')
+      }
+
+      // Response yoksa veya success false ise
+      if (!functionData || !functionData.success) {
+        console.error('Unexpected response:', functionData)
+        throw new Error('Kullanıcı oluşturulamadı. Lütfen Edge Function\'ı kontrol edin.')
       }
 
       // Oluşturulan kullanıcıyı getir

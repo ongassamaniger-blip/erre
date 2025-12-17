@@ -52,13 +52,81 @@ export const useAuthStore = create<AuthStore>()(
           if (session?.user) {
             console.log('Valid Supabase session found for user:', session.user.id)
 
-            // Simple auth - just use session data
+            // Load user profile and facilities from database
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single()
+
+            if (profileError || !profile) {
+              console.error('Profile not found, creating default profile:', profileError)
+              
+              // Profile yoksa, varsayılan bir profile oluştur
+              const { data: newProfile, error: createError } = await supabase
+                .from('profiles')
+                .insert({
+                  id: session.user.id,
+                  email: session.user.email || '',
+                  name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Kullanıcı',
+                  role: 'User',
+                  status: 'active'
+                })
+                .select()
+                .single()
+
+              if (createError || !newProfile) {
+                console.error('Failed to create profile:', createError)
+                // Fallback: Minimal user object
+                const user: User = {
+                  id: session.user.id,
+                  email: session.user.email || '',
+                  name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Kullanıcı',
+                  role: 'User',
+                  facilityAccess: []
+                }
+                set({
+                  user,
+                  session,
+                  isAuthenticated: true,
+                  isInitialized: true
+                })
+                return
+              }
+              
+              // Yeni oluşturulan profile'ı kullan
+              const user: User = {
+                id: session.user.id,
+                email: session.user.email || newProfile.email || '',
+                name: newProfile.name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Kullanıcı',
+                role: (newProfile.role as any) || 'User',
+                facilityAccess: []
+              }
+              set({
+                user,
+                session,
+                isAuthenticated: true,
+                isInitialized: true
+              })
+              return
+            }
+
+            // Load user facilities
+            const { data: facilityUsers } = await supabase
+              .from('facility_users')
+              .select('facility_id, facilities(code)')
+              .eq('user_id', session.user.id)
+
+            const facilityAccess = (facilityUsers || [])
+              .map((fu: any) => fu.facilities?.code)
+              .filter(Boolean) as string[]
+
             const user: User = {
               id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Kullanıcı',
-              role: 'Super Admin',
-              facilityAccess: ['GM01']
+              email: session.user.email || profile.email || '',
+              name: profile.name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Kullanıcı',
+              role: (profile.role as any) || 'User',
+              facilityAccess: facilityAccess.length > 0 ? facilityAccess : []
             }
 
             set({
@@ -103,13 +171,85 @@ export const useAuthStore = create<AuthStore>()(
           }
 
           if (data.session) {
-            // Simple login - just set the session and user
+            // Load user profile and facilities from database
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', data.session.user.id)
+              .single()
+
+            if (profileError || !profile) {
+              console.error('Profile not found during login:', profileError)
+              
+              // Profile yoksa, varsayılan bir profile oluştur
+              const { data: newProfile, error: createError } = await supabase
+                .from('profiles')
+                .insert({
+                  id: data.session.user.id,
+                  email: data.session.user.email || email,
+                  name: data.session.user.user_metadata?.name || email.split('@')[0] || 'Kullanıcı',
+                  role: 'User',
+                  status: 'active'
+                })
+                .select()
+                .single()
+
+              if (createError || !newProfile) {
+                console.error('Failed to create profile during login:', createError)
+                return { 
+                  success: false, 
+                  error: 'Kullanıcı profili oluşturulamadı. Lütfen yöneticiye başvurun.', 
+                  code: 'PROFILE_CREATE_FAILED' 
+                }
+              }
+              
+              // Yeni oluşturulan profile'ı kullan
+              const { data: facilityUsers } = await supabase
+                .from('facility_users')
+                .select('facility_id, facilities(code)')
+                .eq('user_id', data.session.user.id)
+
+              const facilityAccess = (facilityUsers || [])
+                .map((fu: any) => fu.facilities?.code)
+                .filter(Boolean) as string[]
+
+              const user: User = {
+                id: data.session.user.id,
+                email: data.session.user.email || newProfile.email || email,
+                name: newProfile.name || data.session.user.user_metadata?.name || email.split('@')[0],
+                role: (newProfile.role as any) || 'User',
+                facilityAccess: facilityAccess.length > 0 ? facilityAccess : []
+              }
+
+              set({
+                user,
+                session: data.session,
+                isAuthenticated: true,
+                isInitialized: true
+              })
+
+              await get().loadUserNotifications()
+              get().subscribeToNotifications()
+
+              return { success: true }
+            }
+
+            // Load user facilities
+            const { data: facilityUsers } = await supabase
+              .from('facility_users')
+              .select('facility_id, facilities(code)')
+              .eq('user_id', data.session.user.id)
+
+            const facilityAccess = (facilityUsers || [])
+              .map((fu: any) => fu.facilities?.code)
+              .filter(Boolean) as string[]
+
             const user: User = {
               id: data.session.user.id,
-              email: data.session.user.email || email,
-              name: data.session.user.user_metadata?.name || email.split('@')[0],
-              role: 'Super Admin',
-              facilityAccess: ['GM01']
+              email: data.session.user.email || profile.email || email,
+              name: profile.name || data.session.user.user_metadata?.name || email.split('@')[0],
+              role: (profile.role as any) || 'User',
+              facilityAccess: facilityAccess.length > 0 ? facilityAccess : []
             }
 
             set({
@@ -118,6 +258,10 @@ export const useAuthStore = create<AuthStore>()(
               isAuthenticated: true,
               isInitialized: true
             })
+
+            // Load notifications
+            await get().loadUserNotifications()
+            get().subscribeToNotifications()
 
             return { success: true }
           }

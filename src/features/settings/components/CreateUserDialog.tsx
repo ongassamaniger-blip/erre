@@ -69,7 +69,7 @@ export function CreateUserDialog({
       email: '',
       password: '',
       name: '',
-      role: 'User',
+      role: 'User' as const,
       facilityIds: [],
       sendInviteEmail: false,
     },
