@@ -27,6 +27,7 @@ import { LoadingScreen } from '@/components/common/LoadingScreen'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { branchSettingsService } from '@/services/branchSettingsService'
 import { useTranslation } from '@/hooks/useTranslation'
+import { toast } from 'sonner'
 
 function ClockDisplay() {
   const selectedFacility = useAuthStore(state => state.selectedFacility)
@@ -83,9 +84,23 @@ export function Header({ onMenuClick }: HeaderProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
 
-  const { data: facilities = [] } = useQuery({
+  // Sadece kullanıcının erişimi olan tesisleri getir
+  const { data: allFacilities = [] } = useQuery({
     queryKey: ['facilities'],
     queryFn: () => facilityService.getFacilities(),
+  })
+
+  // Kullanıcının erişimi olan tesisleri filtrele
+  const facilities = allFacilities.filter((facility: Facility) => {
+    if (!user?.facilityAccess || user.facilityAccess.length === 0) {
+      return false
+    }
+    // Super Admin tüm tesislere erişebilir
+    if (user.role === 'Super Admin') {
+      return true
+    }
+    // Diğer kullanıcılar sadece erişimi olan tesisleri görebilir
+    return user.facilityAccess.includes(facility.code)
   })
 
   useEffect(() => {
@@ -114,6 +129,21 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const handleFacilityChange = async (facility: Facility) => {
     if (selectedFacility?.id === facility.id) return
+
+    // Erişim kontrolü
+    if (!user) {
+      console.error('User not found')
+      return
+    }
+
+    // Super Admin tüm tesislere erişebilir
+    if (user.role !== 'Super Admin') {
+      // Kullanıcının bu tesise erişimi var mı kontrol et
+      if (!user.facilityAccess || !user.facilityAccess.includes(facility.code)) {
+        toast.error('Bu tesise erişim yetkiniz bulunmamaktadır')
+        return
+      }
+    }
 
     setIsSwitching(true)
 
