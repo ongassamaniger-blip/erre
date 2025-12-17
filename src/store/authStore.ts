@@ -87,7 +87,7 @@ export const useAuthStore = create<AuthStore>()(
                 }
                 set({
                   user,
-                  session,
+                  session: null, // Session'ı store'da tutma - Supabase kendi session'ını yönetiyor
                   isAuthenticated: true,
                   isInitialized: true
                 })
@@ -221,12 +221,12 @@ export const useAuthStore = create<AuthStore>()(
                 facilityAccess: facilityAccess.length > 0 ? facilityAccess : []
               }
 
-              set({
-                user,
-                session: data.session,
-                isAuthenticated: true,
-                isInitialized: true
-              })
+            set({
+              user,
+              session: null, // Session'ı store'da tutma - Supabase kendi session'ını yönetiyor
+              isAuthenticated: true,
+              isInitialized: true
+            })
 
               await get().loadUserNotifications()
               get().subscribeToNotifications()
@@ -254,7 +254,7 @@ export const useAuthStore = create<AuthStore>()(
 
             set({
               user,
-              session: data.session,
+              session: null, // Session'ı store'da tutma - Supabase kendi session'ını yönetiyor
               isAuthenticated: true,
               isInitialized: true
             })
@@ -490,49 +490,32 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       subscribeToNotifications: () => {
-        const { user, session } = get()
+        const { user } = get()
         if (!user) return
 
-        // Prevent duplicate subscriptions
-        if (session?.notificationChannel) {
-          return
-        }
-
-        const channel = supabase
-          .channel('public:notifications')
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'notifications',
-              filter: `user_id=eq.${user.id}`
-            },
-            (payload) => {
-              const newNotification = payload.new as Notification
-              set(state => ({
-                notifications: [newNotification, ...state.notifications]
-              }))
-            }
-          )
-          .subscribe()
-
-        set({ session: { ...session, notificationChannel: channel } })
+        // Channel'ı ayrı bir ref olarak tut (session'a ekleme - circular reference hatası)
+        // Zaten NotificationProvider'da subscription yönetiliyor, burada gerek yok
+        // Bu fonksiyon artık kullanılmıyor, NotificationProvider kullanılıyor
       },
 
       unsubscribeFromNotifications: () => {
-        const { session } = get()
-        if (session?.notificationChannel) {
-          supabase.removeChannel(session.notificationChannel)
-        }
+        // Channel'lar NotificationProvider tarafından yönetiliyor
+        // Bu fonksiyon artık gerekli değil
       }
     }),
     {
       name: 'auth-storage',
       partialize: (state) => ({
-        user: state.user,
+        // Session'ı persist etme - Supabase kendi session'ını yönetiyor ve circular reference içeriyor
+        user: state.user ? {
+          id: state.user.id,
+          email: state.user.email,
+          name: state.user.name,
+          role: state.user.role,
+          facilityAccess: state.user.facilityAccess
+        } : null,
         selectedFacility: state.selectedFacility,
-        session: state.session,
+        // session: state.session, // ❌ Session'ı persist etme - circular reference hatası
         isAuthenticated: state.isAuthenticated
       }),
       onRehydrateStorage: () => (state) => {
